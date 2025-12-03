@@ -1,2 +1,11 @@
+#Environment variables
+.env
+.env.local
+
+#API keys and secrets
+*.key
+*.secret
+
+#Python cache and virtual environments
 __pycache__/
 myenv/
