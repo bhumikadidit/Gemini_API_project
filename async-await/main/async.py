@@ -4,6 +4,7 @@ import aiohttp
 import aiofiles
 from dotenv import load_dotenv
 import json
+import re  # For regex to extract PDF from script
 from google import genai
 from pydantic import BaseModel, Field
 from typing import List
@@ -13,9 +14,10 @@ from bs4 import BeautifulSoup
 load_dotenv()
 genai.api_key = os.getenv("GEMINI_API_KEY")
 
-# Define the data model
+# Define the data model with source for unique identification
 class Decision(BaseModel):
-    serial_number: int = Field(description="The serial number of the decision as an integer.")
+    source: str = Field(description="Unique identifier for the PDF source, e.g., 'page1_item1'")
+    serial_number: str = Field(description="Unique serial number with source prefix, e.g., 'page1_item1_1'")
     ministry: str = Field(description="The name of the responsible ministry in Nepali.")
     decision_summary: str = Field(description="A brief summary of the decision in Nepali.")
 
@@ -36,25 +38,36 @@ async def get_content_urls_from_page(session, page_url):
                 urls.append(full_url)
         return urls
 
-# Async function to get PDF URL from a content page
-async def get_pdf_url_from_content(session, content_url):
+# Async function to get PDF URLs from a content page
+async def get_pdf_urls_from_content(session, content_url):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     async with session.get(content_url, headers=headers) as response:
         if response.status != 200:
-            return None
+            return []
         html = await response.text()
         soup = BeautifulSoup(html, 'html.parser')
-        # Check <a> tags for .pdf
+        pdf_urls = []
+        # Check <a> tags for PDFs
         for link in soup.find_all('a', href=True):
             href = link['href'].strip()
-            if href.endswith('.pdf'):
-                return href if href.startswith('http') else f"https://mocit.gov.np{href}"
+            if '.pdf' in href:
+                full_url = href if href.startswith('http') else f"https://mocit.gov.np{href}"
+                pdf_urls.append(full_url)
         # Check <embed> or <iframe> for PDFs
         for tag in soup.find_all(['embed', 'iframe'], src=True):
             src = tag['src'].strip()
-            if src.endswith('.pdf'):
-                return src if src.startswith('http') else f"https://mocit.gov.np{src}"
-    return None
+            if '.pdf' in src:
+                full_url = src if src.startswith('http') else f"https://mocit.gov.np{src}"
+                pdf_urls.append(full_url)
+        # Check <script> tags for PDF variable (e.g., var pdf = '...')
+        for script in soup.find_all('script'):
+            if script.string:
+                match = re.search(r"var pdf = ['\"]([^'\"]+\.pdf)['\"];", script.string)
+                if match:
+                    pdf_url = match.group(1)
+                    full_url = pdf_url if pdf_url.startswith('http') else f"https://mocit.gov.np{pdf_url}"
+                    pdf_urls.append(full_url)
+        return pdf_urls
 
 # Async function to download a PDF
 async def download_pdf(session, url, filename):
@@ -65,8 +78,8 @@ async def download_pdf(session, url, filename):
             return filename
     return None
 
-# Async function to process a PDF
-async def process_pdf(pdf_path, output_json_path):
+# Async function to process a PDF and extract data
+async def process_pdf(pdf_path, source_id):
     uploaded_file = None
     try:
         client = genai.Client()
@@ -85,13 +98,20 @@ async def process_pdf(pdf_path, output_json_path):
                 response_schema=response_schema,
             ),
         )
-        data = json.loads(response.text)
-        async with aiofiles.open(output_json_path, 'w', encoding='utf-8') as f:
-            await f.write(json.dumps(data, indent=2, ensure_ascii=False))
-        return True
+        raw_data = json.loads(response.text)
+        # Add source and unique serial numbers
+        processed_data = []
+        for i, item in enumerate(raw_data, start=1):
+            processed_data.append({
+                "source": source_id,
+                "serial_number": f"{source_id}_{i}",
+                "ministry": item.get("ministry", ""),
+                "decision_summary": item.get("decision_summary", "")
+            })
+        return processed_data
     except Exception as e:
         print(f"Error processing {pdf_path}: {e}")
-        return False
+        return []
     finally:
         if uploaded_file:
             client.files.delete(name=uploaded_file.name)
@@ -100,7 +120,7 @@ async def process_pdf(pdf_path, output_json_path):
 async def main():
     base_url = "https://mocit.gov.np/category/326/?page="
     page_num = 1
-    all_pdf_tasks = []
+    all_decisions = []
       
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     async with aiohttp.ClientSession(headers=headers) as session:
@@ -110,36 +130,27 @@ async def main():
             if not content_urls:
                 break
               
-            for content_url in content_urls:
-                pdf_url = await get_pdf_url_from_content(session, content_url)
-                if pdf_url:
-                    content_id = content_url.split('/')[-2]
-                    pdf_filename = f"temp_{content_id}.pdf"
-                    json_filename = f"output_{content_id}.json"
-                      
-                    download_task = download_pdf(session, pdf_url, pdf_filename)
-                    all_pdf_tasks.append((download_task, pdf_filename, json_filename))
+            for idx, content_url in enumerate(content_urls):
+                pdf_urls = await get_pdf_urls_from_content(session, content_url)
+                if pdf_urls:
+                    source_id = f"page{page_num}_item{idx+1}"
+                    for pdf_url in pdf_urls:
+                        pdf_filename = f"temp_{source_id}.pdf"
+                        downloaded = await download_pdf(session, pdf_url, pdf_filename)
+                        if downloaded:
+                            decisions = await process_pdf(downloaded, source_id)
+                            all_decisions.extend(decisions)
+                            os.remove(downloaded)  # Clean up
               
             page_num += 1
           
-        if not all_pdf_tasks:
-            print("No PDFs found to process. Check if content pages have PDFs or site structure changed.")
-            return
-          
-        download_results = await asyncio.gather(*[task[0] for task in all_pdf_tasks])
-          
-        process_tasks = []
-        for (_, pdf_file, json_path), result in zip(all_pdf_tasks, download_results):
-            if result:
-                process_tasks.append(process_pdf(result, json_path))
-          
-        await asyncio.gather(*process_tasks)
-          
-        for _, downloaded_file, _ in all_pdf_tasks:
-            if os.path.exists(downloaded_file):
-                os.remove(downloaded_file)
-      
-    print("All PDFs processed and saved to JSON files.")
+        # Save all decisions to a single JSON file
+        if all_decisions:
+            async with aiofiles.open("all_decisions.json", 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(all_decisions, indent=2, ensure_ascii=False))
+            print(f"All data saved to all_decisions.json with {len(all_decisions)} decisions.")
+        else:
+            print("No data extracted. Check if PDFs are available on content pages.")
 
 # Run the async main
 if __name__ == "__main__":

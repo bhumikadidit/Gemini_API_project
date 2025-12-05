@@ -1,5 +1,5 @@
 #Environment variables
-.env
+.env 
 .env.local
 
 #API keys and secrets
@@ -8,4 +8,5 @@
 
 #Python cache and virtual environments
 __pycache__/
+bhumika/
 myenv/
