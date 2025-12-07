@@ -153,12 +153,17 @@ async def main():
             page_num += 1
           
         if all_decisions:
+            # Append to existing JSON if it exists
+            existing_data = []
+            if os.path.exists("all_decisions.json"):
+                with open("all_decisions.json", 'r', encoding='utf-8') as f:
+                    existing_data = json.load(f)
+            existing_data.extend(all_decisions)
             async with aiofiles.open("all_decisions.json", 'w', encoding='utf-8') as f:
-                await f.write(json.dumps(all_decisions, indent=2, ensure_ascii=False))
-            print(f"All data saved to all_decisions.json with {len(all_decisions)} decisions.")
+                await f.write(json.dumps(existing_data, indent=2, ensure_ascii=False))
+            print(f"Data appended to all_decisions.json. Total decisions: {len(existing_data)}")
         else:
-            print("No data extracted. Check if PDFs are available on content pages.")
-
+            print("No new data extracted.")
 # Run the async main
 if __name__ == "__main__":
     if "GEMINI_API_KEY" not in os.environ:
