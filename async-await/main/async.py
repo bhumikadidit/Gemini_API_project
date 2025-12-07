@@ -21,6 +21,30 @@ class Decision(BaseModel):
     ministry: str = Field(description="The name of the responsible ministry in Nepali.")
     decision_summary: str = Field(description="A brief summary of the decision in Nepali.")
 
+# Load progress from file
+def load_progress():
+    if os.path.exists('progress.txt'):
+        with open('progress.txt', 'r') as f:
+            return int(f.read().strip())
+    return 1  # Start from page 1
+
+# Save progress to file
+def save_progress(page_num):
+    with open('progress.txt', 'w') as f:
+        f.write(str(page_num))
+
+# Load processed PDFs
+def load_processed_pdfs():
+    if os.path.exists('processed_pdfs.txt'):
+        with open('processed_pdfs.txt', 'r') as f:
+            return set(line.strip() for line in f)
+    return set()
+
+# Save processed PDF
+def save_processed_pdf(source_id):
+    with open('processed_pdfs.txt', 'a') as f:
+        f.write(source_id + '\n')
+
 # Async function to get content URLs from a paginated page
 async def get_content_urls_from_page(session, page_url):
     async with session.get(page_url) as response:
@@ -127,7 +151,8 @@ async def process_pdf(pdf_path, source_id):
 # Main async function
 async def main():
     base_url = "https://mocit.gov.np/category/326/?page="
-    page_num = 1
+    page_num = load_progress()  # Resume from last page
+    processed_pdfs = load_processed_pdfs()
     all_decisions = []
       
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
@@ -139,17 +164,22 @@ async def main():
                 break
               
             for idx, content_url in enumerate(content_urls):
+                source_id = f"page{page_num}_item{idx+1}"
+                if source_id in processed_pdfs:
+                    print(f"Skipping already processed: {source_id}")
+                    continue
                 pdf_urls = await get_pdf_urls_from_content(session, content_url)
                 if pdf_urls:
-                    source_id = f"page{page_num}_item{idx+1}"
                     for pdf_url in pdf_urls:
                         pdf_filename = f"temp_{source_id}.pdf"
                         downloaded = await download_pdf(session, pdf_url, pdf_filename)
                         if downloaded:
                             decisions = await process_pdf(downloaded, source_id)
                             all_decisions.extend(decisions)
+                            save_processed_pdf(source_id)  # Mark as processed
                             os.remove(downloaded)
               
+            save_progress(page_num)  # Save progress after each page
             page_num += 1
           
         if all_decisions:
@@ -164,6 +194,7 @@ async def main():
             print(f"Data appended to all_decisions.json. Total decisions: {len(existing_data)}")
         else:
             print("No new data extracted.")
+
 # Run the async main
 if __name__ == "__main__":
     if "GEMINI_API_KEY" not in os.environ:
