@@ -79,7 +79,8 @@ async def download_pdf(session, url, filename):
             async with aiofiles.open(filename, 'wb') as f:
                 await f.write(await response.read())
             return filename
-    return None
+        else:
+            print(f"Failed to download {url}: HTTP {response.status}")  
 
 # Async function to process a PDF and extract data
 async def process_pdf(pdf_path, source_id):
