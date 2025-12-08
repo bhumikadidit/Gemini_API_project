@@ -8,4 +8,11 @@
 
 #Python cache and virtual environments
 __pycache__/
+*.pyc
 myenv/
+
+#PDF processing temporary files
+temp_*.pdf
+progress.txt
+processed_pdfs.txt
+all_decisions.json

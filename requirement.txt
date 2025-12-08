@@ -1,0 +1,9 @@
+aiohttp
+aiofiles
+beautifulsoup4
+python-dotenv
+pydantic
+google-genai
+pytest
+pytest-asyncio
+pytest-mock
