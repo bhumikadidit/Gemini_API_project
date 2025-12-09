@@ -2,12 +2,6 @@ import pytest
 import os
 import json
 from unittest.mock import patch, AsyncMock, MagicMock
-# from pathlib import Path
-# import sys
-
-# # Add src to path for imports
-# sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from src.scraper import get_content_urls_from_page, get_pdf_urls_from_content, download_pdf, process_pdf
 from src.main import main, load_progress, save_progress, load_processed_pdfs, save_processed_pdf
 
