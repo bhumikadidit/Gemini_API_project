@@ -68,6 +68,7 @@ async def main():
                             decisions = await process_pdf(downloaded, source_id)
                             all_decisions.extend(decisions)
                             save_processed_pdf(source_id)  # Mark as processed
+                            process_count = 0
                             process_count += 1
                             os.remove(downloaded)
               

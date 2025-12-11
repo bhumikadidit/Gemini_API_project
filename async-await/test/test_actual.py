@@ -20,7 +20,7 @@ async def test_get_content_urls_from_page_success():
         urls = await get_content_urls_from_page(session, "https://mocit.gov.np/category/326/?page=1")
         assert isinstance(urls, list)  # Should return a list
         assert len(urls) >= 0  # At least empty if no cards
-        
+
 @pytest.mark.asyncio
 async def test_get_content_urls_from_page_no_cards():
     """Test handling when no content cards are found (use a page with no data if possible)."""
@@ -38,6 +38,7 @@ async def test_get_pdf_urls_from_content_with_download_link():
         assert len(urls) >= 0  # May be empty if no PDFs
         if urls:
             assert any('.pdf' in url for url in urls)  # Ensure it's a PDF URL if found
+
 @pytest.mark.asyncio
 async def test_get_pdf_urls_from_content_no_pdf():
     """Test handling when no PDFs are found (use a page without PDFs)."""
@@ -46,7 +47,7 @@ async def test_get_pdf_urls_from_content_no_pdf():
         urls = await get_pdf_urls_from_content(session, "https://mocit.gov.np/content/1")  # Example
         assert urls == []  # Should return empty list
 
-# Test download function (using real HTTP)
+# Test download function with real HTTP requests
 @pytest.mark.asyncio
 async def test_download_pdf_success():
     """Test successful PDF download from a real URL."""
@@ -68,3 +69,61 @@ async def test_download_pdf_failure():
     async with aiohttp.ClientSession(headers=HEADERS) as session:
         result = await download_pdf(session, "https://mocit.gov.np/pdf/notfound.pdf", "test.pdf")
         assert result is None  # Should return None on failure
+
+# Test processing function using real API 
+@pytest.mark.asyncio
+async def test_process_pdf_success():
+    """Test successful PDF processing with real AI API."""
+    if not genai_api_key:
+        pytest.skip("GEMINI_API_KEY not set—skipping real API test")
+    
+    pdf_path = "test_download.pdf"  # Assume we have one from download test
+    if not os.path.exists(pdf_path):
+        # Download a real PDF for testing
+        async with aiohttp.ClientSession(headers=HEADERS) as session:
+            await download_pdf(session, "https://mocit.gov.np/pdf/example.pdf", pdf_path)  # Replace with real URL
+    
+    if os.path.exists(pdf_path):
+        data = await process_pdf(pdf_path, "test_source")
+        assert isinstance(data, list)  # Should return a list
+        if data:
+            assert data[0]["source"] == "test_source"  # Check source ID
+        os.remove(pdf_path)  # Clean up
+
+# Test progress and file handling functions
+def test_load_progress_no_file(tmp_path):
+    """Test loading progress when no file exists."""
+    os.chdir(tmp_path)  # Use temp dir
+    assert load_progress() == 1  # Should default to 1
+
+def test_save_and_load_progress(tmp_path):
+    """Test saving and loading progress."""
+    os.chdir(tmp_path)
+    save_progress(5)
+    assert load_progress() == 5  # Should match saved value
+
+def test_load_processed_pdfs_no_file(tmp_path):
+    """Test loading processed PDFs when no file exists."""
+    os.chdir(tmp_path)
+    assert load_processed_pdfs() == set()  # Should return empty set
+
+def test_save_and_load_processed_pdfs(tmp_path):
+    """Test saving and loading processed PDF IDs."""
+    os.chdir(tmp_path)
+    save_processed_pdf("page1_item1")
+    assert "page1_item1" in load_processed_pdfs()  # Should contain saved ID
+
+# Test full main function (integration test)  
+@pytest.mark.asyncio
+async def test_main_integration():
+    """Test the full main() function with real calls."""
+    if not genai_api_key:
+        pytest.skip("GEMINI_API_KEY not set—skipping real integration test")
+    
+    await main()  # Runs full scraping, downloading, processing
+    assert os.path.exists("all_decisions.json")  # Output file should exist
+    with open("all_decisions.json", 'r') as f:
+        data = json.load(f)
+        assert isinstance(data, list)  # Should have data
+        if data:
+            assert "source" in data[0]  # Basic structure check
