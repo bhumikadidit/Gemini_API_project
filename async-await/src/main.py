@@ -38,45 +38,88 @@ def save_processed_pdf(source_id):
     with open('processed_pdfs.txt', 'a') as f:
         f.write(source_id + '\n')
 
+# Function to scrape all pages and collect PDF URLs
+async def scrape_all_pages(session, base_url, start_page):
+    all_pdf_data = []  # List of dicts: {'source_id': str, 'pdf_urls': list}
+    page_num = start_page
+    while True:
+        page_url = f"{base_url}{page_num}"
+        content_urls = await get_content_urls_from_page(session, page_url)
+        if not content_urls:
+            break
+        
+        for idx, content_url in enumerate(content_urls):
+            source_id = f"page{page_num}_item{idx+1}"
+            pdf_urls = await get_pdf_urls_from_content(session, content_url)
+            if pdf_urls:
+                all_pdf_data.append({'source_id': source_id, 'pdf_urls': pdf_urls})
+        
+        page_num += 1
+    
+    save_progress(page_num - 1)  # Save progress after scraping all
+    return all_pdf_data
+
+# Function to download all PDFs
+async def download_all_pdfs(session, all_pdf_data, processed_pdfs):
+    downloaded_files = []  # List of dicts: {'source_id': str, 'filename': str}
+    tasks = []
+    
+    for data in all_pdf_data:
+        source_id = data['source_id']
+        if source_id in processed_pdfs:
+            print(f"Skipping already processed: {source_id}")
+            continue
+        
+        for pdf_url in data['pdf_urls']:
+            pdf_filename = f"temp_{source_id}.pdf"
+            tasks.append(download_pdf(session, pdf_url, pdf_filename))
+    
+    # Run downloads in parallel
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            print(f"Download failed for task {i}: {result}")
+        else:
+            downloaded_files.append({'source_id': all_pdf_data[i]['source_id'], 'filename': result})
+    
+    return downloaded_files
+
+# Function to process all PDFs with LLM
+async def process_all_pdfs(downloaded_files):
+    all_decisions = []
+    for file_data in downloaded_files:
+        source_id = file_data['source_id']
+        filename = file_data['filename']
+        decisions = await process_pdf(filename, source_id)
+        all_decisions.extend(decisions)
+        save_processed_pdf(source_id)
+        os.remove(filename)  # Clean up
+    
+    return all_decisions
+
 # Main async function
 async def main():
     base_url = "https://mocit.gov.np/category/326/?page="
-    page_num = load_progress()  # Resume from last page
+    start_page = load_progress()
     processed_pdfs = load_processed_pdfs()
     all_decisions = []
-      
+    
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     async with aiohttp.ClientSession(headers=headers) as session:
-        while True:
-            page_url = f"{base_url}{page_num}"
-            content_urls = await get_content_urls_from_page(session, page_url)
-            if not content_urls:
-                break
-              
-            for idx, content_url in enumerate(content_urls):
-                source_id = f"page{page_num}_item{idx+1}"
-                if source_id in processed_pdfs:
-                    print(f"Skipping already processed: {source_id}")
-                    continue
-            
-                pdf_urls = await get_pdf_urls_from_content(session, content_url)
-                if pdf_urls:
-                    for pdf_url in pdf_urls:
-                        pdf_filename = f"temp_{source_id}.pdf"
-                        downloaded = await download_pdf(session, pdf_url, pdf_filename)
-                        if downloaded:
-                            decisions = await process_pdf(downloaded, source_id)
-                            all_decisions.extend(decisions)
-                            save_processed_pdf(source_id)  # Mark as processed
-                            process_count = 0
-                            process_count += 1
-                            os.remove(downloaded)
-              
-            save_progress(page_num)  #Save progress after each page
-            page_num += 1
-          
+        #Scrape all pages
+        print("Phase 1: Scraping all pages...")
+        all_pdf_data = await scrape_all_pages(session, base_url, start_page)
+        
+        #Download all PDFs
+        print("Phase 2: Downloading all PDFs...")
+        downloaded_files = await download_all_pdfs(session, all_pdf_data, processed_pdfs)
+        
+        #Process all PDFs with LLM
+        print("Phase 3: Processing all PDFs with LLM...")
+        all_decisions = await process_all_pdfs(downloaded_files)
+        
+        # Save final data
         if all_decisions:
-            # Append to existing JSON if it exists
             existing_data = []
             if os.path.exists("all_decisions.json"):
                 with open("all_decisions.json", 'r', encoding='utf-8') as f:
