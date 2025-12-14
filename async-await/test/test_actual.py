@@ -113,7 +113,47 @@ def test_save_and_load_processed_pdfs(tmp_path):
     save_processed_pdf("page1_item1")
     assert "page1_item1" in load_processed_pdfs()  # Should contain saved ID
 
-# Test full main function (integration test)  
+@pytest.mark.asyncio
+async def test_scrape_all_pages():
+    """Test scraping all pages and collecting PDF data."""
+    async with aiohttp.ClientSession(headers=HEADERS) as session:
+        base_url = "https://mocit.gov.np/category/326/?page="
+        data = await scrape_all_pages(session, base_url, 1)
+        assert isinstance(data, list)  # Should return a list of dicts
+        if data:
+            assert "source_id" in data[0] and "pdf_urls" in data[0]  # Check structure
+
+@pytest.mark.asyncio
+async def test_download_all_pdfs():
+    """Test downloading all PDFs in parallel."""
+    async with aiohttp.ClientSession(headers=HEADERS) as session:
+        # Mock or use real data from scrape
+        all_pdf_data = [{'source_id': 'page1_item1', 'pdf_urls': ['https://mocit.gov.np/pdf/example.pdf']}]  # Replace with real
+        processed_pdfs = set()
+        files = await download_all_pdfs(session, all_pdf_data, processed_pdfs)
+        assert isinstance(files, list)  # Should return a list of dicts
+        if files:
+            assert "source_id" in files[0] and "filename" in files[0]  # Check structure
+            # Clean up downloaded files
+            for f in files:
+                if os.path.exists(f['filename']):
+                    os.remove(f['filename'])
+
+@pytest.mark.asyncio
+async def test_process_all_pdfs():
+    """Test processing all downloaded PDFs with LLM."""
+    if not genai_api_key:
+        pytest.skip("GEMINI_API_KEY not set—skipping real API test")
+    
+    # Assume we have downloaded files (from previous test)
+    downloaded_files = [{'source_id': 'page1_item1', 'filename': 'temp_page1_item1.pdf'}]  # Mock or real
+    if os.path.exists('temp_page1_item1.pdf'):  # Ensure file exists
+        decisions = await process_all_pdfs(downloaded_files)
+        assert isinstance(decisions, list)  # Should return a list
+        if decisions:
+            assert "source" in decisions[0]  # Check structure
+
+# Test full main function integration  
 @pytest.mark.asyncio
 async def test_main_integration():
     """Test the full main() function with real calls."""
