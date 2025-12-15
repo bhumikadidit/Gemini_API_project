@@ -80,7 +80,8 @@ async def download_pdf(session, url, filename):
                 await f.write(await response.read())
             return filename
         else:
-            print(f"Failed to download {url}: HTTP {response.status}")  
+            print(f"Failed to download {url}: HTTP {response.status}")
+            return None 
 
 # Async function to process a PDF and extract data
 async def process_pdf(pdf_path, source_id):
