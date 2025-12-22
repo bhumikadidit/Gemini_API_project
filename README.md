@@ -23,7 +23,7 @@ This project asynchronously extracts and processes decision data from PDFs on th
 ├── .gitignore          # Ignored files (env, temp files, etc.)
 ├── progress.txt         # Tracks last processed page (auto-generated)
 ├── processed_pdfs.txt   # Tracks processed PDFs (auto-generated)
-└── all_decisions.json   # Final output (auto-generated)
+└── all_decisions.json   # Final output (auto-generated) 
 ```
 
 ## ⚙️ Prerequisites
@@ -77,7 +77,7 @@ python main.py
   - `decision_summary`: Brief summary (Nepali)
 
 ## 🧪 Testing
-- **Mock Tests** (`test_all.py`): Fast, offline unit tests
+- **Mock Tests** (`test_all.py`): Fast, offline unit tests using mock
 - **Real Tests** (`test_actual.py`): Live HTTP and API tests (requires internet & API key)
 
 ## ⚠️ Notes
@@ -88,7 +88,3 @@ python main.py
 
 ## 🗂️ Synchronous Version
 A synchronous version is also available in the codebase but is **not the primary focus**. It follows similar logic but without async/await patterns. Use it only if async is not feasible for your environment.
-
-## 📄 License
-Internal use – not for redistribution.
-
