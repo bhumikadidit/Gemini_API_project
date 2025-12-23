@@ -25,7 +25,7 @@ async def test_get_content_urls_from_page_success():
 async def test_get_content_urls_from_page_no_cards():
     """Test handling when no content cards are found (use a page with no data if possible)."""
     async with aiohttp.ClientSession(headers=HEADERS) as session:
-        # Use a page that might have no cards (adjust URL if needed)
+        # Use a high page number likely to have no content
         urls = await get_content_urls_from_page(session, "https://mocit.gov.np/category/326/?page=999")  # High page number
         assert urls == []  # Should return empty list if no data
 
@@ -44,7 +44,7 @@ async def test_get_pdf_urls_from_content_no_pdf():
     """Test handling when no PDFs are found (use a page without PDFs)."""
     async with aiohttp.ClientSession(headers=HEADERS) as session:
         # Use a content page that likely has no PDFs (adjust URL)
-        urls = await get_pdf_urls_from_content(session, "https://mocit.gov.np/content/1")  # Example
+        urls = await get_pdf_urls_from_content(session, "https://mocit.gov.np/content/1")  # Use a known URL with no PDFs
         assert urls == []  # Should return empty list
 
 @pytest.mark.asyncio
@@ -166,5 +166,5 @@ async def test_main_integration():
             if data:
                 assert "source" in data[0]  # Basic structure check
     else:
-        # If no file, that's okay if no new data was extracted
+        # If file doesn't exist, that's also acceptable in this context
         pass

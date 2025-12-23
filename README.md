@@ -17,8 +17,8 @@ This project asynchronously extracts and processes decision data from PDFs on th
 ├── scraper.py           # Async web scraping & PDF handling
 ├── models.py            # Pydantic data model (Decision)
 ├── conftest.py          # Pytest fixtures & mocks
-├── test_all.py          # Mock-based unit tests
-├── test_actual.py       # Real HTTP/API integration tests
+├── test_mock.py          # Mock-based unit tests
+├── test_real.py       # Real HTTP/API integration tests
 ├── requirements.txt     # Python dependencies
 ├── .gitignore          # Ignored files (env, temp files, etc.)
 ├── progress.txt         # Tracks last processed page (auto-generated)
@@ -56,11 +56,11 @@ python main.py
 ### Key Commands:
 - **Run tests (mock-based)**:
   ```bash
-  pytest test_all.py -v
+  pytest test_mock.py -v
   ```
 - **Run real integration tests** (requires API key and internet):
   ```bash
-  pytest test_actual.py -v
+  pytest test_real.py -v
   ```
 - **Clean temporary files**:
   ```bash
@@ -77,8 +77,8 @@ python main.py
   - `decision_summary`: Brief summary (Nepali)
 
 ## 🧪 Testing
-- **Mock Tests** (`test_all.py`): Fast, offline unit tests using mock
-- **Real Tests** (`test_actual.py`): Live HTTP and API tests (requires internet & API key)
+- **Mock Tests** (`test_mock.py`): Fast, offline unit tests using mock
+- **Real Tests** (`test_real.py`): Live HTTP and API tests (requires internet & API key)
 
 ## ⚠️ Notes
 - The script is **resumable**: It tracks processed pages and PDFs.
