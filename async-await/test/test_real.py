@@ -170,3 +170,22 @@ async def test_main_integration():
         pass
 
 
+@pytest.mark.asyncio
+async def test_main_output_data_validation():
+    """Test validation of data in all_decisions.json after running main."""
+    if not genai_api_key:
+        pytest.skip("GEMINI_API_KEY not set—skipping real integration test")
+    
+    await main()  # Run the full process
+    if os.path.exists("all_decisions.json"):
+        with open("all_decisions.json", 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            assert isinstance(data, list)
+            if data:
+                for item in data:
+                    assert "source" in item and item["source"]  # Ensure source is present and not empty
+                    assert "ministry" in item and item["ministry"]  # Ensure ministry is present and not empty
+                    assert "decision_summary" in item  # Ensure decision_summary exists (can be empty)
+    else:
+        # If no file, that's fine (no new data)
+        pass 
