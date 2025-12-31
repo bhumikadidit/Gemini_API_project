@@ -8,11 +8,15 @@ from google import genai
 from pydantic import BaseModel, Field
 from typing import List
 from bs4 import BeautifulSoup
+import logging
 from .scraper import get_content_urls_from_page, get_pdf_urls_from_content, download_pdf, process_pdf
 
 # Load environment variables
 load_dotenv()
 genai.api_key = os.getenv("GEMINI_API_KEY")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load progress from file
 def load_progress():
@@ -98,6 +102,7 @@ async def process_all_pdfs(downloaded_files):
     return all_decisions
 
 # Main async function
+# Main async function
 async def main():
     base_url = "https://mocit.gov.np/category/326/?page="
     start_page = load_progress()
@@ -107,16 +112,19 @@ async def main():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     async with aiohttp.ClientSession(headers=headers) as session:
         #Scrape all pages
-        print("Phase 1: Scraping all pages...")
+        logging.info(f"Phase 1: Starting to scrape pages from {start_page}...")
         all_pdf_data = await scrape_all_pages(session, base_url, start_page)
+        logging.info(f"Phase 1: Completed scraping. Found {len(all_pdf_data)} PDF sources.")
         
         #Download all PDFs
-        print("Phase 2: Downloading all PDFs...")
+        logging.info("Phase 2: Starting PDF downloads...")
         downloaded_files = await download_all_pdfs(session, all_pdf_data, processed_pdfs)
+        logging.info(f"Phase 2: Completed downloads. Downloaded {len(downloaded_files)} files.")
         
         #Process all PDFs with LLM
-        print("Phase 3: Processing all PDFs with LLM...")
+        logging.info("Phase 3: Starting PDF processing with LLM...")
         all_decisions = await process_all_pdfs(downloaded_files)
+        logging.info(f"Phase 3: Completed processing. Extracted {len(all_decisions)} decisions.")
         
         # Save final data
         if all_decisions:
@@ -127,9 +135,9 @@ async def main():
             existing_data.extend(all_decisions)
             async with aiofiles.open("all_decisions.json", 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(existing_data, indent=2, ensure_ascii=False))
-            print(f"Data appended to all_decisions.json. Total decisions: {len(existing_data)}")
+            logging.info(f"Data appended to all_decisions.json. Total decisions: {len(existing_data)}")
         else:
-            print("No new data extracted.")
+            logging.info("No new data extracted.")
 
 # Run the async main
 if __name__ == "__main__":

@@ -74,14 +74,22 @@ async def get_pdf_urls_from_content(session, content_url):
 
 # Async function to download a PDF
 async def download_pdf(session, url, filename):
-    async with session.get(url) as response:
-        if response.status == 200:
-            async with aiofiles.open(filename, 'wb') as f:
-                await f.write(await response.read())
-            return filename
-        else:
-            print(f"Failed to download {url}: HTTP {response.status}")
-            return None 
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    async with aiofiles.open(filename, 'wb') as f:
+                        await f.write(await response.read())
+                    return filename
+                else:
+                    print(f"Failed to download {url}: HTTP {response.status} (attempt {attempt + 1})")
+        except Exception as e:
+            print(f"Error downloading {url}: {e} (attempt {attempt + 1})")
+        if attempt < max_retries - 1:
+            await asyncio.sleep(1)  # Wait 1 second before retry
+    print(f"Giving up on {url} after {max_retries} attempts")
+    return None
 
 # Async function to process a PDF and extract data
 async def process_pdf(pdf_path, source_id):
