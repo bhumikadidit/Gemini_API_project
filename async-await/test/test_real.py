@@ -189,3 +189,11 @@ async def test_main_output_data_validation():
     else:
         # If no file, that's fine (no new data)
         pass 
+
+@pytest.mark.asyncio
+async def test_get_pdf_urls_from_content_http_error():
+    """Test handling of HTTP errors (e.g., 404) in PDF URL extraction."""
+    async with aiohttp.ClientSession(headers=HEADERS) as session:
+        # Use a URL that likely returns a 404 or similar error
+        urls = await get_pdf_urls_from_content(session, "https://mocit.gov.np/content/invalid123")  # Invalid content ID
+        assert urls == []  # Should return empty list on error
