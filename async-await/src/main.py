@@ -102,7 +102,6 @@ async def process_all_pdfs(downloaded_files):
     return all_decisions
 
 # Main async function
-# Main async function
 async def main():
     base_url = "https://mocit.gov.np/category/326/?page="
     start_page = load_progress()

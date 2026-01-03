@@ -4,7 +4,7 @@ import json
 from google import genai
 from pydantic import BaseModel, Field
 from typing import List
-import csv
+import csv 
 
 # Load environment variables from .env file
 load_dotenv()
@@ -79,12 +79,12 @@ def save_data_to_csv(data: List[dict], filename: str = "output.csv"):
     if not data:
         print("No data to save.")
         return
-    # Get fieldnames from the first dict (assumes all dicts have the same keys)
+    # Get fieldnames from the first dict
     fieldnames = data[0].keys()
     with open(filename, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()  # Write column headers
-        writer.writerows(data)  # Write the data rows
+        writer.writeheader()  
+        writer.writerows(data)  
     print(f"Data successfully saved to {filename}")
 
 if __name__ == "__main__":
@@ -94,16 +94,11 @@ if __name__ == "__main__":
         print("Error: The GEMINI_API_KEY environment variable is not set.")
         print("Please set it before running the script.")
     else:
-        # Extract the data
+        # Extract the data (still as JSON internally)
         extracted_data = extract_structured_data_from_pdf(PDF_FILE_PATH)
 
         if extracted_data:
-            # Save to JSON file
-            with open("output.json", "w", encoding="utf-8") as f:
-                json.dump(extracted_data, f, indent=2, ensure_ascii=False)
-            print("Data successfully extracted and saved to output.json")
+            # Convert the extracted JSON content to CSV
+            save_data_to_csv(extracted_data, "output.csv")
         else:
             print("Failed to extract data.")
-
-
-
