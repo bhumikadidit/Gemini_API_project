@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from typing import List
 from bs4 import BeautifulSoup
 from .models import Decision
+import logging 
 
 # Load environment variables
 load_dotenv()
@@ -72,7 +73,7 @@ async def get_pdf_urls_from_content(session, content_url):
         print(f"Found {len(pdf_urls)} PDF(s) on {content_url}: {list(pdf_urls)}")
         return list(pdf_urls)
 
-# Async function to download a PDF
+# Async function to download a PDF with enhanced retry logic
 async def download_pdf(session, url, filename):
     max_retries = 3
     for attempt in range(max_retries):
@@ -83,47 +84,56 @@ async def download_pdf(session, url, filename):
                         await f.write(await response.read())
                     return filename
                 else:
-                    print(f"Failed to download {url}: HTTP {response.status} (attempt {attempt + 1})")
+                    logging.warning(f"Download failed for {url}: HTTP {response.status} (attempt {attempt + 1}/{max_retries})")
         except Exception as e:
-            print(f"Error downloading {url}: {e} (attempt {attempt + 1})")
+            logging.error(f"Error downloading {url}: {e} (attempt {attempt + 1}/{max_retries})")
         if attempt < max_retries - 1:
-            await asyncio.sleep(1)  # Wait 1 second before retry
-    print(f"Giving up on {url} after {max_retries} attempts")
-    return None
+            delay = min(2 ** attempt, 10)  # Exponential backoff: 1s, 2s, 4s (capped at 10s)
+            logging.info(f"Retrying {url} in {delay} seconds...")
+            await asyncio.sleep(delay)
+    logging.error(f"Giving up on {url} after {max_retries} attempts")
+    return None 
 
-# Async function to process a PDF and extract data
+# Async function to process a PDF and extract data with enhanced retry logic
 async def process_pdf(pdf_path, source_id):
     uploaded_file = None
-    try:
-        client = genai.Client()
-        uploaded_file = client.files.upload(file=pdf_path)
-        prompt = (
-            "Analyze the attached PDF file, which contains a list of Council of Ministers decisions. "
-            "Extract the data for all decisions strictly following the provided JSON schema. "
-            "Ensure the output is a single JSON array containing all entries."
-        )
-        response_schema = {"type": "array", "items": Decision.model_json_schema()}
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[prompt, uploaded_file],
-            config=genai.types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=response_schema,
-            ),
-        )
-        raw_data = json.loads(response.text)
-        processed_data = []
-        for i, item in enumerate(raw_data, start=1):
-            processed_data.append({
-                "source": source_id,
-                "serial_number": f"{source_id}_{i}",
-                "ministry": item.get("ministry", ""),
-                "decision_summary": item.get("decision_summary", "")
-            })
-        return processed_data
-    except Exception as e:
-        print(f"Error processing {pdf_path}: {e}")
-        return []
-    finally:
-        if uploaded_file:
-            client.files.delete(name=uploaded_file.name)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            client = genai.Client()
+            uploaded_file = client.files.upload(file=pdf_path)
+            prompt = (
+                "Analyze the attached PDF file, which contains a list of Council of Ministers decisions. "
+                "Extract the data for all decisions strictly following the provided JSON schema. "
+                "Ensure the output is a single JSON array containing all entries."
+            )
+            response_schema = {"type": "array", "items": Decision.model_json_schema()}
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[prompt, uploaded_file],
+                config=genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                ),
+            )
+            raw_data = json.loads(response.text)
+            processed_data = []
+            for i, item in enumerate(raw_data, start=1):
+                processed_data.append({
+                    "source": source_id,
+                    "serial_number": f"{source_id}_{i}",
+                    "ministry": item.get("ministry", ""),
+                    "decision_summary": item.get("decision_summary", "")
+                })
+            return processed_data
+        except Exception as e:
+            logging.error(f"Error processing {pdf_path}: {e} (attempt {attempt + 1}/{max_retries})")
+        finally:
+            if uploaded_file:
+                client.files.delete(name=uploaded_file.name)
+        if attempt < max_retries - 1:
+            delay = min(2 ** attempt, 10)  # Exponential backoff: 1s, 2s, 4s
+            logging.info(f"Retrying processing for {pdf_path} in {delay} seconds...")
+            await asyncio.sleep(delay)
+    logging.error(f"Giving up on processing {pdf_path} after {max_retries} attempts")
+    return []
