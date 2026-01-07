@@ -10,6 +10,7 @@ from typing import List
 from bs4 import BeautifulSoup
 import logging
 from .scraper import get_content_urls_from_page, get_pdf_urls_from_content, download_pdf, process_pdf
+from .data_cleaning import clean_extracted_data
 
 # Load environment variables
 load_dotenv()
@@ -124,6 +125,11 @@ async def main():
         logging.info("Phase 3: Starting PDF processing with LLM...")
         all_decisions = await process_all_pdfs(downloaded_files)
         logging.info(f"Phase 3: Completed processing. Extracted {len(all_decisions)} decisions.")
+        
+        # Clean the extracted data
+        logging.info("Phase 4: Starting data cleaning...")
+        all_decisions = clean_extracted_data(all_decisions)
+        logging.info(f"Phase 4: Data cleaning complete. {len(all_decisions)} valid decisions retained.")
         
         # Save final data
         if all_decisions:
