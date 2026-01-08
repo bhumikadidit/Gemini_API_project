@@ -50,7 +50,7 @@ This project asynchronously extracts and processes decision data from PDFs on th
 ## 🏃 Usage
 Run the main script (asynchronous version):
 ```bash
-python main.py
+python -m src.main
 ```
 
 ### Key Commands:
