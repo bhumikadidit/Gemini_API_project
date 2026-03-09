@@ -1,90 +1,60 @@
-# PDF Data Extraction with Gemini AI API
+﻿# PDF Decision Extraction (Gemini + Async Scraper)
 
-## 📌 Project Overview
-This project asynchronously extracts and processes decision data from PDFs on the **Ministry of Communication and Information Technology (MOCIT), Nepal** website using the **Google Gemini AI API**. It scrapes paginated content, downloads PDFs, processes them with AI, and stores structured data in JSON format.
+## Overview
+This project scrapes decision documents from Nepal MOCIT pages, downloads PDFs, extracts structured decisions with Gemini, cleans the data, and stores it in JSON.
 
-## 🚀 Features
-- **Asynchronous Web Scraping** using `aiohttp`
-- **PDF Download & Processing** with AI-powered data extraction
-- **Resumable Progress Tracking** (progress.txt, processed_pdfs.txt)
-- **Structured JSON Output** with Pydantic validation
-- **Unit & Integration Tests** with pytest
-- **Error Handling & Rate Limiting** built-in
+It includes:
+- `async-await/`: primary async pipeline (recommended)
+- `synchronous/`: simpler synchronous reference version
 
-## 📁 Project Structure
-```
-├── main.py              # Main async orchestration script
-├── scraper.py           # Async web scraping & PDF handling
-├── models.py            # Pydantic data model (Decision)
-├── conftest.py          # Pytest fixtures & mocks
-├── test_mock.py          # Mock-based unit tests
-├── test_real.py       # Real HTTP/API integration tests
-├── requirements.txt     # Python dependencies
-├── .gitignore          # Ignored files (env, temp files, etc.)
-├── progress.txt         # Tracks last processed page (auto-generated)
-├── processed_pdfs.txt   # Tracks processed PDFs (auto-generated)
-└── all_decisions.json   # Final output (auto-generated) 
-```
+## Repository Layout
+- `async-await/src/main.py`: orchestration (scrape, download, extract, clean, save)
+- `async-await/src/scraper.py`: page parsing, PDF discovery, download, LLM extraction
+- `async-await/src/models.py`: Pydantic schema for extracted decisions
+- `async-await/src/data_cleaning.py`: post-processing and deduplication
+- `async-await/test/`: mock and real integration tests
+- `synchronous/main.py`: single-file synchronous workflow
+- `requirement.txt`: Python dependencies
 
-## ⚙️ Prerequisites
-- Python 3.8+
-- Google Gemini API Key ([Get it here](https://aistudio.google.com/app/apikey))
+## Prerequisites
+- Python 3.10+
+- Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-## 🔧 Installation
-1. Clone the repository:
-   ```bash
-   git clone <your-repo-url>
-   cd <project-folder>
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Set up environment variables:
-   - Create a `.env` file in the project root
-   - Add your Gemini API key:
-     ```
-     GEMINI_API_KEY=your_api_key_here
-     ```
-
-## 🏃 Usage
-Run the main script (asynchronous version):
+## Setup
 ```bash
+python -m venv myenv
+myenv\Scripts\activate
+pip install -r requirement.txt
+```
+
+Create `.env` in project root:
+```env
+GEMINI_API_KEY=your_api_key_here
+```
+
+## Run (Async Pipeline)
+```bash
+cd async-await
 python -m src.main
 ```
 
-### Key Commands:
-- **Run tests (mock-based)**:
-  ```bash
-  pytest test_mock.py -v
-  ```
-- **Run real integration tests** (requires API key and internet):
-  ```bash
-  pytest test_real.py -v
-  ```
-- **Clean temporary files**:
-  ```bash
-  del temp_*.pdf  # Windows
-  # or
-  rm temp_*.pdf   # Linux/Mac
-  ```
+Generated files:
+- `async-await/all_decisions.json`
+- `async-await/progress.txt`
+- `async-await/processed_pdfs.txt`
 
-## 📊 Output
-- `all_decisions.json` – Contains extracted decision data with:
-  - `source`: Unique PDF identifier
-  - `serial_number`: Sequential ID per PDF
-  - `ministry`: Ministry name (Nepali)
-  - `decision_summary`: Brief summary (Nepali)
+## Run Tests
+From `async-await/`:
+```bash
+pytest test/test_mock.py -v
+```
 
-## 🧪 Testing
-- **Mock Tests** (`test_mock.py`): Fast, offline unit tests using mock
-- **Real Tests** (`test_real.py`): Live HTTP and API tests (requires internet & API key)
+Real/integration tests (network + API key required):
+```bash
+pytest test/test_real.py -v
+```
 
-## ⚠️ Notes
-- The script is **resumable**: It tracks processed pages and PDFs.
-- Temporary PDFs are deleted after processing.
-- Ensure `GEMINI_API_KEY` is set in environment or `.env` file.
-- Rate limits and network errors are handled with retries/logging.
-
-## 🗂️ Synchronous Version
-A synchronous version is also available in the codebase but is **not the primary focus**. It follows similar logic but without async/await patterns. Use it only if async is not feasible for your environment.
+## Notes
+- The async pipeline is resumable via `progress.txt` and `processed_pdfs.txt`.
+- Temporary PDFs are deleted after successful processing.
+- Real tests may be flaky if source pages or PDF links change.

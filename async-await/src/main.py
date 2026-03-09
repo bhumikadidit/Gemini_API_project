@@ -1,13 +1,10 @@
-import os
+﻿import os
 import asyncio
 import aiohttp
 import aiofiles
 from dotenv import load_dotenv
 import json
 from google import genai
-from pydantic import BaseModel, Field
-from typing import List
-from bs4 import BeautifulSoup
 import logging
 from .scraper import get_content_urls_from_page, get_pdf_urls_from_content, download_pdf, process_pdf
 from .data_cleaning import clean_extracted_data
@@ -52,15 +49,15 @@ async def scrape_all_pages(session, base_url, start_page):
         content_urls = await get_content_urls_from_page(session, page_url)
         if not content_urls:
             break
-        
+
         for idx, content_url in enumerate(content_urls):
             source_id = f"page{page_num}_item{idx+1}"
             pdf_urls = await get_pdf_urls_from_content(session, content_url)
             if pdf_urls:
                 all_pdf_data.append({'source_id': source_id, 'pdf_urls': pdf_urls})
-        
+
         page_num += 1
-    
+
     save_progress(page_num - 1)  # Save progress after scraping all
     return all_pdf_data
 
@@ -68,25 +65,28 @@ async def scrape_all_pages(session, base_url, start_page):
 async def download_all_pdfs(session, all_pdf_data, processed_pdfs):
     downloaded_files = []  # List of dicts: {'source_id': str, 'filename': str}
     tasks = []
-    
+    task_sources = []
+
     for data in all_pdf_data:
         source_id = data['source_id']
         if source_id in processed_pdfs:
             print(f"Skipping already processed: {source_id}")
             continue
-        
-        for pdf_url in data['pdf_urls']:
-            pdf_filename = f"temp_{source_id}.pdf"
+
+        for pdf_idx, pdf_url in enumerate(data['pdf_urls'], start=1):
+            # Keep filenames unique when a source has multiple PDFs.
+            pdf_filename = f"temp_{source_id}_{pdf_idx}.pdf"
             tasks.append(download_pdf(session, pdf_url, pdf_filename))
-    
+            task_sources.append(source_id)
+
     # Run downloads in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             print(f"Download failed for task {i}: {result}")
-        else:
-            downloaded_files.append({'source_id': all_pdf_data[i]['source_id'], 'filename': result})
-    
+        elif result:
+            downloaded_files.append({'source_id': task_sources[i], 'filename': result})
+
     return downloaded_files
 
 # Function to process all PDFs with LLM
@@ -98,8 +98,9 @@ async def process_all_pdfs(downloaded_files):
         decisions = await process_pdf(filename, source_id)
         all_decisions.extend(decisions)
         save_processed_pdf(source_id)
-        os.remove(filename)  # Clean up
-    
+        if os.path.exists(filename):
+            os.remove(filename)  # Clean up
+
     return all_decisions
 
 # Main async function
@@ -108,29 +109,29 @@ async def main():
     start_page = load_progress()
     processed_pdfs = load_processed_pdfs()
     all_decisions = []
-    
+
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     async with aiohttp.ClientSession(headers=headers) as session:
-        #Scrape all pages
+        # Scrape all pages
         logging.info(f"Phase 1: Starting to scrape pages from {start_page}...")
         all_pdf_data = await scrape_all_pages(session, base_url, start_page)
         logging.info(f"Phase 1: Completed scraping. Found {len(all_pdf_data)} PDF sources.")
-        
-        #Download all PDFs
+
+        # Download all PDFs
         logging.info("Phase 2: Starting PDF downloads...")
         downloaded_files = await download_all_pdfs(session, all_pdf_data, processed_pdfs)
         logging.info(f"Phase 2: Completed downloads. Downloaded {len(downloaded_files)} files.")
-        
-        #Process all PDFs with LLM
+
+        # Process all PDFs with LLM
         logging.info("Phase 3: Starting PDF processing with LLM...")
         all_decisions = await process_all_pdfs(downloaded_files)
         logging.info(f"Phase 3: Completed processing. Extracted {len(all_decisions)} decisions.")
-        
+
         # Clean the extracted data
         logging.info("Phase 4: Starting data cleaning...")
         all_decisions = clean_extracted_data(all_decisions)
         logging.info(f"Phase 4: Data cleaning complete. {len(all_decisions)} valid decisions retained.")
-        
+
         # Save final data
         if all_decisions:
             existing_data = []
